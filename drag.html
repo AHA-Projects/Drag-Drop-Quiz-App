@@ -1,0 +1,610 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+
+	<title>Arduino Pseudocode Drag and Drop Quiz</title>
+	
+	 <link rel="stylesheet" href="style.css">
+	
+	
+	<script type="text/javascript">
+	
+	
+	/* VARIABLES YOU COULD MODIFY */
+	var boxSizeArray = [3,3,3,3,3,3,3];	// Array indicating how many items there is room for in the right column ULs
+	
+	var arrow_offsetX = -5;	// Offset X - position of small arrow
+	var arrow_offsetY = 0;	// Offset Y - position of small arrow
+	
+	var arrow_offsetX_firefox = -6;	// Firefox - offset X small arrow
+	var arrow_offsetY_firefox = -13; // Firefox - offset Y small arrow
+	
+	var verticalSpaceBetweenListItems = 3;	// Pixels space between one <li> and next	
+											// Same value or higher as margin bottom in CSS for #dhtmlgoodies_dragDropContainer ul li,#dragContent li
+	
+											
+	var initShuffleItems = true;	// Shuffle items before staring
+
+	var indicateDestionationByUseOfArrow = true;	// Display arrow to indicate where object will be dropped(false = use rectangle)
+	
+	
+	var lockedAfterDrag = false;	/* Lock items after they have been dragged, i.e. the user get's only one shot for the correct answer */
+	
+	
+	/* END VARIABLES YOU COULD MODIFY */
+	
+	var dragDropTopContainer = false;
+	var dragTimer = -1;
+	var dragContentObj = false;
+	var contentToBeDragged = false;	// Reference to dragged <li>
+	var contentToBeDragged_src = false;	// Reference to parent of <li> before drag started
+	var contentToBeDragged_next = false; 	// Reference to next sibling of <li> to be dragged
+	var destinationObj = false;	// Reference to <UL> or <LI> where element is dropped.
+	var dragDropIndicator = false;	// Reference to small arrow indicating where items will be dropped
+	var ulPositionArray = new Array();
+	var mouseoverObj = false;	// Reference to highlighted DIV
+	
+	var MSIE = navigator.userAgent.indexOf('MSIE')>=0?true:false;
+	var navigatorVersion = navigator.appVersion.replace(/.*?MSIE (\d\.\d).*/g,'$1')/1;
+	var destinationBoxes = new Array();
+	var indicateDestinationBox = false;
+
+	/* ADD THIS NEW FUNCTION FOR CHECKING ANSWERS AND GIVING FEEDBACK */
+    function checkAnswersAndGiveFeedback() {
+        var feedbackMessages = [];
+        var allPlacedItemsAreCorrect = true; // Assume true until a wrong answer is found
+        var itemsActuallyInBoxes = 0;
+
+        var feedbackContainer = document.getElementById('feedbackContainer');
+        // If feedbackContainer doesn't exist, we'll use alerts, but it's better to ensure it's in the HTML.
+        var feedbackDisplayElement = feedbackContainer || { innerHTML: "" }; // Use a dummy object if container is null
+
+        feedbackDisplayElement.innerHTML = ''; // Clear previous feedback
+
+        // Iterate through each destination box (box1, box2, box3)
+        for (var i = 0; i < destinationBoxes.length; i++) {
+            var box = destinationBoxes[i]; // This is the UL element
+            var subLis = box.getElementsByTagName('LI');
+
+            for (var j = 0; j < subLis.length; j++) {
+                itemsActuallyInBoxes++;
+                var item = subLis[j];
+                var itemGroupId = item.getAttribute('groupid'); // The correct group ID for this item
+                var currentBoxId = box.id; // The ID of the box it's currently in
+
+                if (itemGroupId === currentBoxId) {
+                    item.className = 'correctAnswer'; // Apply correct style
+                } else {
+                    item.className = 'wrongAnswer'; // Apply wrong style
+                    allPlacedItemsAreCorrect = false; // Mark that at least one item is wrong
+                    
+                    var feedbackText = item.getAttribute('data-feedback');
+                    var itemName = item.textContent || item.innerText; // Get the text of the LI
+                    
+                    if (feedbackText) {
+                        feedbackMessages.push("<strong>" + itemName.trim() + ":</strong> " + feedbackText);
+                    } else {
+                        feedbackMessages.push("<strong>" + itemName.trim() + "</strong> is in the wrong category.");
+                    }
+                }
+            }
+        }
+
+        var remainingItemsInAllItemsList = document.getElementById('allItems').getElementsByTagName('LI').length;
+        var allPossibleItemsArePlaced = (remainingItemsInAllItemsList === 0);
+
+        // Determine the overall feedback message
+        if (itemsActuallyInBoxes === 0 && !allPossibleItemsArePlaced) {
+            feedbackDisplayElement.innerHTML = "<p>Please drag items into the category boxes and then check your answers.</p>";
+        } else if (allPossibleItemsArePlaced && allPlacedItemsAreCorrect) {
+            feedbackDisplayElement.innerHTML = '<p style="color: green; font-weight: bold;">Congratulations! Everything is correct and all items are placed!</p>';
+        } else if (!allPossibleItemsArePlaced && allPlacedItemsAreCorrect && itemsActuallyInBoxes > 0) {
+            feedbackDisplayElement.innerHTML = '<p style="color: #c67000; font-weight: bold;">Looking good! All items you\'ve placed so far are correct. Keep going to place the remaining items!</p>';
+        } else if (!allPlacedItemsAreCorrect) { // This means at least one placed item is wrong
+            var message = "<p style='color: red; font-weight: bold;'>Some answers are incorrect. Please review the feedback:</p><ul><li>" + feedbackMessages.join("</li><li>") + "</li></ul>";
+            if (!allPossibleItemsArePlaced && itemsActuallyInBoxes > 0) { // Placed some, some wrong, some still in allItems
+                message += "<p style='color: red; font-weight: bold;'>Also, there are still items remaining to be placed.</p>";
+            } else if (!allPossibleItemsArePlaced && itemsActuallyInBoxes === 0) { // Nothing placed, but somehow this condition was missed (should be caught by first if)
+                 feedbackDisplayElement.innerHTML = "<p>Please drag items into the category boxes and then check your answers.</p>"; // Resets if logic error
+                 return;
+            }
+            feedbackDisplayElement.innerHTML = message;
+        } else { 
+            // Default/fallback case, e.g., all items are still in the 'allItems' list and none placed.
+            feedbackDisplayElement.innerHTML = "<p>Place all items in the correct categories and click 'Check Answers' again.</p>";
+        }
+
+        // If the feedbackContainer was not found in HTML, use alert as a fallback.
+        if (!feedbackContainer) {
+            var alertText = feedbackDisplayElement.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''); // Basic HTML to text
+            alert(alertText || "Please check the console for feedback details if the feedback area is missing.");
+        }
+    }
+
+
+    function resetQuiz() {
+        var allItemsUList = document.getElementById('allItems');
+        if (!allItemsUList) {
+            console.error("allItems UL not found!");
+            return; 
+        }
+
+        var destinationIds = ['box1', 'box2', 'box3']; // IDs of your destination ULs
+
+        destinationIds.forEach(function(boxId) {
+            var box = document.getElementById(boxId);
+            if (box) {
+                var listItems = box.getElementsByTagName('LI');
+                // Iterate backwards when removing items from a live HTMLCollection
+                for (var i = listItems.length - 1; i >= 0; i--) {
+                    var item = listItems[i];
+                    item.className = ''; // Clear CSS classes (correctAnswer, wrongAnswer)
+                    allItemsUList.appendChild(item); // Move item back to the allItems list
+                }
+            }
+        });
+
+        // Clear the "saveContent" div
+        var saveContentDiv = document.getElementById('saveContent');
+        if (saveContentDiv) {
+            saveContentDiv.innerHTML = '';
+        }
+
+		// Clear the feedback container
+        var feedbackContainer = document.getElementById('feedbackContainer');
+        if (feedbackContainer) {
+            feedbackContainer.innerHTML = '';
+        }
+        // Hide indicators and clear dragged content state
+        if (dragDropIndicator) {
+            dragDropIndicator.style.display = 'none';
+        }
+        
+        if (indicateDestinationBox && indicateDestinationBox.style) { 
+            indicateDestinationBox.style.display = 'none';
+        }
+
+        if (dragContentObj) {
+            dragContentObj.style.display = 'none'; // Hide the floating drag container
+            while (dragContentObj.firstChild) { // Clear any lingering item in it
+                dragContentObj.removeChild(dragContentObj.firstChild);
+            }
+        }
+        
+        if (mouseoverObj) { // Clear highlight from any previously moused-over UL parent
+            if (mouseoverObj.className) mouseoverObj.className = '';
+            mouseoverObj = false;
+        }
+        destinationObj = false; // Reset last drop destination
+        contentToBeDragged = false; // Reset item being dragged
+        destinationBoxes = []; 
+        initDragDropScript();
+    }
+
+    window.onload = function() {
+        initDragDropScript(); // Initialize the quiz as before
+        
+        // Add event listener for the newly added reset button
+        var resetButton = document.getElementById('resetButton'); 
+        if (resetButton) {
+            resetButton.onclick = resetQuiz;
+        } else {
+            console.error("Reset button not found!");
+        }
+    };
+		
+	function getTopPos(inputObj)
+	{		
+	  var returnValue = inputObj.offsetTop;
+	  while((inputObj = inputObj.offsetParent) != null){
+	  	if(inputObj.tagName!='HTML')returnValue += inputObj.offsetTop;
+	  }
+	  return returnValue;
+	}
+	
+	function getLeftPos(inputObj)
+	{
+	  var returnValue = inputObj.offsetLeft;
+	  while((inputObj = inputObj.offsetParent) != null){
+	  	if(inputObj.tagName!='HTML')returnValue += inputObj.offsetLeft;
+	  }
+	  return returnValue;
+	}
+		
+	function cancelEvent()
+	{
+		return false;
+	}
+	function initDrag(e)	// Mouse button is pressed down on a LI
+	{
+		if(document.all)e = event;
+		if(lockedAfterDrag && this.parentNode.id!='allItems')return;
+		var st = Math.max(document.body.scrollTop,document.documentElement.scrollTop);
+		var sl = Math.max(document.body.scrollLeft,document.documentElement.scrollLeft);
+		
+		
+		
+		dragTimer = 0;
+		dragContentObj.style.left = e.clientX + sl + 'px';
+		dragContentObj.style.top = e.clientY + st + 'px';
+		contentToBeDragged = this;
+		contentToBeDragged_src = this.parentNode;
+		contentToBeDragged_next = false;
+		if(this.nextSibling){
+			contentToBeDragged_next = this.nextSibling;
+			if(!this.tagName && contentToBeDragged_next.nextSibling)contentToBeDragged_next = contentToBeDragged_next.nextSibling;
+		}
+		timerDrag();
+		return false;
+	}
+	
+	function everythingIsCorrect()
+	{
+		alert('Congratulations! Everything is correct');		
+	}
+	
+	
+	function timerDrag()
+	{
+		if(dragTimer>=0 && dragTimer<10){
+			dragTimer++;
+			setTimeout('timerDrag()',10);
+			return;
+		}
+		if(dragTimer==10){
+			dragContentObj.style.display='block';
+			dragContentObj.appendChild(contentToBeDragged);
+		}
+	}
+	
+	function moveDragContent(e)
+	{
+		if(dragTimer<10){
+			if(contentToBeDragged){
+				if(contentToBeDragged_next){
+					contentToBeDragged_src.insertBefore(contentToBeDragged,contentToBeDragged_next);
+				}else{
+					contentToBeDragged_src.appendChild(contentToBeDragged);
+				}	
+			}
+			return;
+		}
+		if(document.all)e = event;
+		var st = Math.max(document.body.scrollTop,document.documentElement.scrollTop);
+		var sl = Math.max(document.body.scrollLeft,document.documentElement.scrollLeft);
+		
+		
+		dragContentObj.style.left = e.clientX + sl + 'px';
+		dragContentObj.style.top = e.clientY + st + 'px';
+		
+		if(mouseoverObj)mouseoverObj.className='';
+		destinationObj = false;
+		dragDropIndicator.style.display='none';
+		if(indicateDestinationBox)indicateDestinationBox.style.display='none';
+		var x = e.clientX + sl;
+		var y = e.clientY + st;
+		var width = dragContentObj.offsetWidth;
+		var height = dragContentObj.offsetHeight;
+		
+		var tmpOffsetX = arrow_offsetX;
+		var tmpOffsetY = arrow_offsetY;
+		if(!document.all){
+			tmpOffsetX = arrow_offsetX_firefox;
+			tmpOffsetY = arrow_offsetY_firefox;
+		}
+
+		for(var no=0;no<ulPositionArray.length;no++){
+			var ul_leftPos = ulPositionArray[no]['left'];	
+			var ul_topPos = ulPositionArray[no]['top'];	
+			var ul_height = ulPositionArray[no]['height'];
+			var ul_width = ulPositionArray[no]['width'];
+			
+			if((x+width) > ul_leftPos && x<(ul_leftPos + ul_width) && (y+height)> ul_topPos && y<(ul_topPos + ul_height)){
+				var noExisting = ulPositionArray[no]['obj'].getElementsByTagName('LI').length;
+				if(indicateDestinationBox && indicateDestinationBox.parentNode==ulPositionArray[no]['obj'])noExisting--;
+				if(noExisting<boxSizeArray[no-1] || no==0){
+					dragDropIndicator.style.left = ul_leftPos + tmpOffsetX + 'px';
+					var subLi = ulPositionArray[no]['obj'].getElementsByTagName('LI');
+					for(var liIndex=0;liIndex<subLi.length;liIndex++){
+						var tmpTop = getTopPos(subLi[liIndex]);
+						if(!indicateDestionationByUseOfArrow){
+							if(y<tmpTop){
+								destinationObj = subLi[liIndex];
+								indicateDestinationBox.style.display='block';
+								subLi[liIndex].parentNode.insertBefore(indicateDestinationBox,subLi[liIndex]);
+								break;
+							}
+						}else{							
+							if(y<tmpTop){
+								destinationObj = subLi[liIndex];
+								dragDropIndicator.style.top = tmpTop + tmpOffsetY - Math.round(dragDropIndicator.clientHeight/2) + 'px';
+								dragDropIndicator.style.display='block';
+								break;
+							}	
+						}					
+					}
+					
+					if(!indicateDestionationByUseOfArrow){
+						if(indicateDestinationBox.style.display=='none'){
+							indicateDestinationBox.style.display='block';
+							ulPositionArray[no]['obj'].appendChild(indicateDestinationBox);
+						}
+						
+					}else{
+						if(subLi.length>0 && dragDropIndicator.style.display=='none'){
+							dragDropIndicator.style.top = getTopPos(subLi[subLi.length-1]) + subLi[subLi.length-1].offsetHeight + tmpOffsetY + 'px';
+							dragDropIndicator.style.display='block';
+						}
+						if(subLi.length==0){
+							dragDropIndicator.style.top = ul_topPos + arrow_offsetY + 'px'
+							dragDropIndicator.style.display='block';
+						}
+					}
+					
+					if(!destinationObj)destinationObj = ulPositionArray[no]['obj'];
+					mouseoverObj = ulPositionArray[no]['obj'].parentNode;
+					mouseoverObj.className='mouseover';
+					return;
+				}
+			}
+		}
+	}
+	
+	function checkAnswers()
+    {
+        for(var no=0;no<destinationBoxes.length;no++){
+            var subLis = destinationBoxes[no].getElementsByTagName('LI');
+            if(subLis.length<boxSizeArray[no])return;   
+            
+            for(var no2=0;no2<subLis.length;no2++){
+                if(subLis[no2].className=='wrongAnswer')return;
+            }       
+        }
+        
+        // everythingIsCorrect(); // Consider commenting this line out
+        // The new "Check Answers" button will provide the main "Congratulations" message.
+        // Leaving it active provides an immediate win if all conditions are met by dragging.
+        // If you comment it out, users MUST click "Check Answers" for the final "Congratulations".
+        // For this exercise, let's assume for now you might want the immediate feedback disabled here.
+        // If you want to keep it, ensure its logic doesn't conflict with the button.
+    }
+	
+	
+	/* End dragging 
+	Put <LI> into a destination or back to where it came from.
+	*/	
+	function dragDropEnd(e)
+	{
+		if(dragTimer==-1)return;
+		if(dragTimer<10){
+			dragTimer = -1;
+			return;
+		}
+		dragTimer = -1;
+		if(document.all)e = event;		
+		if(destinationObj){
+			var groupId = contentToBeDragged.getAttribute('groupId');
+			if(!groupId)groupId = contentToBeDragged.groupId;
+			
+			var destinationToCheckOn = destinationObj;
+			if(destinationObj.tagName!='UL'){
+				destinationToCheckOn = destinationObj.parentNode;
+			}
+			
+			var answerCheck = false;
+			if(groupId == destinationToCheckOn.id){
+				contentToBeDragged.className = 'correctAnswer';		
+				answerCheck=true;	
+			}else{
+				contentToBeDragged.className = 'wrongAnswer';
+			}
+			if(destinationObj.id=='allItems' || destinationObj.parentNode.id=='allItems')contentToBeDragged.className='';
+			
+			
+			if(destinationObj.tagName=='UL'){
+				destinationObj.appendChild(contentToBeDragged);
+			}else{
+				destinationObj.parentNode.insertBefore(contentToBeDragged,destinationObj);
+			}
+			mouseoverObj.className='';
+			destinationObj = false;
+			dragDropIndicator.style.display='none';
+			if(indicateDestinationBox){
+				indicateDestinationBox.style.display='none';
+				document.body.appendChild(indicateDestinationBox);
+			}
+						
+			contentToBeDragged = false;
+			
+			if(answerCheck)checkAnswers();	
+			
+			return;
+		}	
+		if(contentToBeDragged_next){
+			contentToBeDragged_src.insertBefore(contentToBeDragged,contentToBeDragged_next);
+		}else{
+			contentToBeDragged_src.appendChild(contentToBeDragged);
+		}
+		contentToBeDragged = false;
+		dragDropIndicator.style.display='none';
+		if(indicateDestinationBox){
+			indicateDestinationBox.style.display='none';
+			document.body.appendChild(indicateDestinationBox);
+			
+		}		
+		mouseoverObj = false;
+		
+	}
+	
+	/* 
+	Preparing data to be saved 
+	*/
+	function saveDragDropNodes()
+	{
+		var saveString = "";
+		var uls = dragDropTopContainer.getElementsByTagName('UL');
+		for(var no=0;no<uls.length;no++){	// LOoping through all <ul>
+			var lis = uls[no].getElementsByTagName('LI');
+			for(var no2=0;no2<lis.length;no2++){
+				if(saveString.length>0)saveString = saveString + ";";
+				saveString = saveString + uls[no].id + '|' + lis[no2].id;
+			}	
+		}		
+		
+		document.getElementById('saveContent').innerHTML = '<h1>Ready to save these nodes:</h1> ' + saveString.replace(/;/g,';<br>') + '<p>Format: ID of ul |(pipe) ID of li;(semicolon)</p><p>You can put these values into a hidden form fields, post it to the server and explode the submitted value there</p>';
+		
+	}
+	
+	function initDragDropScript()
+	{
+		dragContentObj = document.getElementById('dragContent');
+		dragDropIndicator = document.getElementById('dragDropIndicator');
+		dragDropTopContainer = document.getElementById('dhtmlgoodies_dragDropContainer');
+		document.documentElement.onselectstart = cancelEvent;;
+		var listItems = dragDropTopContainer.getElementsByTagName('LI');	// Get array containing all <LI>
+		var itemHeight = false;
+		for(var no=0;no<listItems.length;no++){
+			listItems[no].onmousedown = initDrag;
+			listItems[no].onselectstart = cancelEvent;
+			if(!itemHeight)itemHeight = listItems[no].offsetHeight;
+			if(MSIE && navigatorVersion/1<6){
+				listItems[no].style.cursor='hand';
+			}			
+		}
+		
+		var mainContainer = document.getElementById('dhtmlgoodies_mainContainer');
+		var uls = mainContainer.getElementsByTagName('UL');
+		itemHeight = itemHeight + verticalSpaceBetweenListItems;
+		for(var no=0;no<uls.length;no++){
+			uls[no].style.height = itemHeight * boxSizeArray[no]  + 'px';
+			destinationBoxes[destinationBoxes.length] = uls[no];
+		}
+		
+		var leftContainer = document.getElementById('dhtmlgoodies_listOfItems');
+		var itemBox = leftContainer.getElementsByTagName('UL')[0];
+		
+		document.documentElement.onmousemove = moveDragContent;	// Mouse move event - moving draggable div
+		document.documentElement.onmouseup = dragDropEnd;	// Mouse move event - moving draggable div
+		
+		var ulArray = dragDropTopContainer.getElementsByTagName('UL');
+		for(var no=0;no<ulArray.length;no++){
+			ulPositionArray[no] = new Array();
+			ulPositionArray[no]['left'] = getLeftPos(ulArray[no]);	
+			ulPositionArray[no]['top'] = getTopPos(ulArray[no]);	
+			ulPositionArray[no]['width'] = ulArray[no].offsetWidth;
+			ulPositionArray[no]['height'] = ulArray[no].clientHeight;
+			ulPositionArray[no]['obj'] = ulArray[no];
+		}
+		
+		if(initShuffleItems){
+			var allItemsObj = document.getElementById('allItems');
+			var initItems = allItemsObj.getElementsByTagName('LI');
+			
+			for(var no=0;no<(initItems.length*10);no++){
+				var itemIndex = Math.floor(Math.random()*initItems.length);
+				allItemsObj.appendChild(initItems[itemIndex]);
+			}
+		}
+		if(!indicateDestionationByUseOfArrow){
+			indicateDestinationBox = document.createElement('LI');
+			indicateDestinationBox.id = 'indicateDestination';
+			indicateDestinationBox.style.display='none';
+			document.body.appendChild(indicateDestinationBox);
+		}		
+		
+	}
+	
+	window.onload = function() {
+        initDragDropScript(); // Initialize the quiz as before
+        
+        var resetButton = document.getElementById('resetButton'); 
+        if (resetButton) {
+            resetButton.onclick = resetQuiz;
+        } else {
+            console.error("Reset button not found!");
+        }
+
+        // Add event listener for the Check Answers button
+        var checkButton = document.getElementById('checkButton');
+        if (checkButton) {
+            checkButton.onclick = checkAnswersAndGiveFeedback; // Assign the new function
+        } else {
+            console.error("Check Answers button not found!");
+        }
+    };
+	</script>
+</head>
+<body>
+    <h1 align="center">Arduino Pseudocode Drag and Drop Quiz</h1>
+    <p>Drag and drop the Arduino pseudocode blocks into their appropriate category boxes.</p>
+
+    <div id="dhtmlgoodies_dragDropContainer">
+        <div id="topBar">
+            <div style="padding-bottom: 5px; width: 900px; height: 1px;"></div>
+        </div>
+
+        <div id="twoColumnLayout" style="display: flex; align-items: flex-start; padding-top: 10px;">
+
+            <div id="dhtmlgoodies_listOfItems" style="flex-basis: 280px; /* Width of the concepts list */ flex-shrink: 0; margin-right: 20px;">
+                <div>
+                    <p>Concepts/Names</p>
+                    <ul id="allItems">
+                        <li id="node7" groupid="box1" data-feedback="Importing Libraries: This is usually the very first step in an Arduino sketch, done before the setup() function.">Importing Libraries</li>
+                        <li class="" id="node15" groupid="box1" data-feedback="Initializing Variables: Global variables are typically declared and initialized before setup() or at the beginning of functions for local variables.">Initializing variables</li>
+                        <li class="" id="node19" groupid="box1" data-feedback="Initializing Objects: Objects are often initialized globally (e.g., for libraries like Servo or LiquidCrystal) or within setup() for hardware-related objects.">Initializing Objects</li>
+                        <li id="node9" groupid="box2" data-feedback="Sensor Check: Initial checks to ensure sensors are working can be part of setup() after initialization.">Sensor Check</li>
+                        <li class="" id="node10" groupid="box2" data-feedback="Sensor Initialization: This is a key part of setup() where you configure sensors, set pin modes, and begin communication (e.g., Serial.begin(), wire.begin()).">Sensor Initialization</li>
+                        <li class="" id="node8" groupid="box2" data-feedback="Logging Sensor Checks: Initial diagnostic messages or status logs after setup are common in the setup() function.">Logging Sensor Checks</li>
+                        <li id="node3" groupid="box3" data-feedback="Reading Sensor: Continuously reading sensor data is the primary function of the loop().">Reading Sensor</li>
+                        <li id="node2" groupid="box3" data-feedback="Delay: Delays are used in the loop() to control the timing of operations, like how often to read a sensor.">Delay</li>
+                        <li id="node16" groupid="box3" data-feedback="Serialing Output: Sending data (like sensor readings) to the Serial Monitor for debugging or display is typically done repeatedly within the loop().">Serialing Output</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="rightSection" style="flex-grow: 1; display: flex; flex-direction: column;">
+
+                <div id="dhtmlgoodies_mainContainer" style="display: flex; justify-content: space-around; width: 100%;">
+                    <div style="text-align: center;"> 
+                        <p>Libraries and Variables</p>
+                        <ul style="height: 72px;" id="box1"></ul>
+                    </div>
+                    <div style="text-align: center;"> 
+                        <p>Setup</p>
+                        <ul style="height: 72px;" id="box2"></ul>
+                    </div>
+                    <div style="text-align: center;"> 
+                        <p>Loop</p>
+                        <ul style="height: 72px;" id="box3"></ul>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; text-align: center; width: 100%;">
+                    <button type="button" id="resetButton" style="padding: 8px 15px; font-size: 16px; cursor: pointer; margin-right: 10px;">Reset Quiz</button>
+                    <button type="button" id="checkButton" style="padding: 8px 15px; font-size: 16px; cursor: pointer;">Check Answers</button>
+                </div>
+
+                <div id="feedbackContainer" style="
+                    margin-top: 15px;     /* Space from buttons */
+                    border: 1px solid #ddd;
+                    background-color: #f9f9f9;
+                    min-height: 40px;
+                    line-height: 1.6;
+                    border-radius: 4px;
+                    padding: 10px;
+					margin-left: -10px;
+                    width: 100%;          /* Takes full width of rightSection */
+                    box-sizing: border-box; /* Ensures padding/border don't make it wider than 100% */
+                ">
+                
+                </div>
+
+                <div id="saveContent" style="margin-top:10px; width: 100%;"></div>
+
+            </div> </div> </div> <ul id="dragContent" style="left: 110px; top: 329px; display: block;"></ul>
+    <div id="dragDropIndicator" style="display: none; left: 24px; top: 333px;"><img src="insert.gif"></div>
+
+</span> </body>
+</html>
