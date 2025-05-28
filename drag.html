@@ -51,10 +51,9 @@
 	var destinationBoxes = new Array();
 	var indicateDestinationBox = false;
 
-	/* ADD THIS NEW FUNCTION FOR CHECKING ANSWERS AND GIVING FEEDBACK */
     function checkAnswersAndGiveFeedback() {
         var feedbackMessages = [];
-        var allPlacedItemsAreCorrect = true; // Assume true until a wrong answer is found
+        var allPlacedItemsAreCorrect = true; 
         var itemsActuallyInBoxes = 0;
 
         var feedbackContainer = document.getElementById('feedbackContainer');
@@ -362,13 +361,6 @@
                 if(subLis[no2].className=='wrongAnswer')return;
             }       
         }
-        
-        // everythingIsCorrect(); // Consider commenting this line out
-        // The new "Check Answers" button will provide the main "Congratulations" message.
-        // Leaving it active provides an immediate win if all conditions are met by dragging.
-        // If you comment it out, users MUST click "Check Answers" for the final "Congratulations".
-        // For this exercise, let's assume for now you might want the immediate feedback disabled here.
-        // If you want to keep it, ensure its logic doesn't conflict with the button.
     }
 	
 	
