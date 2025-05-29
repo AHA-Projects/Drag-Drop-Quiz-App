@@ -13,7 +13,7 @@
 	
 	
 	/* VARIABLES YOU COULD MODIFY */
-	var boxSizeArray = [3,3,3,3,3,3,3];	// Array indicating how many items there is room for in the right column ULs
+	var boxSizeArray = [99,99,99,99,99,99,99];	// Array indicating how many items there is room for in the right column ULs
 	
 	var arrow_offsetX = -5;	// Offset X - position of small arrow
 	var arrow_offsetY = 0;	// Offset Y - position of small arrow
@@ -470,7 +470,7 @@
 		var uls = mainContainer.getElementsByTagName('UL');
 		itemHeight = itemHeight + verticalSpaceBetweenListItems;
 		for(var no=0;no<uls.length;no++){
-			uls[no].style.height = itemHeight * boxSizeArray[no]  + 'px';
+			// uls[no].style.height = itemHeight * boxSizeArray[no]  + 'px';
 			destinationBoxes[destinationBoxes.length] = uls[no];
 		}
 		
@@ -552,6 +552,8 @@
                         <li id="node3" groupid="box3" data-feedback="Continuously reading sensor data is the primary function of the loop().">Reading Sensor</li>
                         <li id="node2" groupid="box3" data-feedback="Delays are used in the loop() to control the timing of operations, like how often to read a sensor.">Delay</li>
                         <li id="node16" groupid="box3" data-feedback="Sending data (like sensor readings) to the Serial Monitor for debugging or display is typically done repeatedly within the loop().">Serialing Output</li>
+						<li id="" groupid="box1" data-feedback="Pin Definitions are often done at the beginning of the sketch, before setup(). This is where you define which pins will be used for input/output.">Pin Definitions</li>
+
                     </ul>
                 </div>
             </div>
@@ -561,15 +563,15 @@
                 <div id="dhtmlgoodies_mainContainer" style="display: flex; justify-content: space-around; width: 100%;">
                     <div style="text-align: center;"> 
                         <p>Libraries and Variables</p>
-                        <ul style="height: 72px;" id="box1"></ul>
+                        <ul style="height: 200px;" id="box1"></ul>
                     </div>
                     <div style="text-align: center;"> 
                         <p>Setup</p>
-                        <ul style="height: 72px;" id="box2"></ul>
+                        <ul style="height: 200px;" id="box2"></ul>
                     </div>
                     <div style="text-align: center;"> 
                         <p>Loop</p>
-                        <ul style="height: 72px;" id="box3"></ul>
+                        <ul style="height: 200px;" id="box3"></ul>
                     </div>
                 </div>
 

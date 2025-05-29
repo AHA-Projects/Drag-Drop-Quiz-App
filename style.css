@@ -107,7 +107,8 @@ body{
 		width:1050px;
 		float:left;	
 	}
-	#dhtmlgoodies_mainContainer div{	/* Parent <div> of small boxes */
+	#dhtmlgoodies_mainContainer div{
+		height: 200px;	/* Parent <div> of small boxes */
 		float:left;
 		margin-right:10px;
 		margin-bottom:10px;
@@ -132,13 +133,11 @@ body{
 		margin-bottom:5px;
 	}
 	
-	#dhtmlgoodies_mainContainer ul{	/* Small box in right column ,i.e <ul> */
-		width:152px;
-		height:80px;	
-		border:0px;	
-		margin-bottom:0px;
-		overflow:hidden;
-		
+	#dhtmlgoodies_mainContainer ul { 
+		width: 152px;              
+		min-height: 60px;         
+		padding: 5px;              
+		margin-bottom: 10px;       
 	}
 	
 	#dragContent{	/* Drag container */
